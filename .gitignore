@@ -1,3 +1,6 @@
+# Secret keys - NEVER commit these
+.env
+
 # Python virtual environment (never commit this - it's huge and machine-specific)
 venv/
 

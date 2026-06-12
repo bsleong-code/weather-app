@@ -1,74 +1,64 @@
+import os
 from flask import Flask, render_template, request
 import requests
+from dotenv import load_dotenv
+
+# Load secret values (like our API key) from a local .env file, if present.
+load_dotenv()
 
 app = Flask(__name__)
 
-# Open-Meteo "weather codes" mapped to a friendly description + emoji.
-WEATHER_CODES = {
-    0: ("Clear sky", "☀️"),
-    1: ("Mainly clear", "\U0001f324️"),
-    2: ("Partly cloudy", "⛅"),
-    3: ("Overcast", "☁️"),
-    45: ("Foggy", "\U0001f32b️"),
-    48: ("Foggy", "\U0001f32b️"),
-    51: ("Light drizzle", "\U0001f327️"),
-    61: ("Light rain", "\U0001f327️"),
-    63: ("Rain", "\U0001f327️"),
-    65: ("Heavy rain", "⛈️"),
-    71: ("Light snow", "\U0001f328️"),
-    73: ("Snow", "❄️"),
-    75: ("Heavy snow", "❄️"),
-    80: ("Rain showers", "\U0001f326️"),
-    95: ("Thunderstorm", "⛈️"),
-}
+# Your secret WeatherAPI.com key. Read from the environment - never hard-coded.
+WEATHER_API_KEY = os.environ.get("WEATHER_API_KEY")
+
+
+def pick_emoji(condition):
+    """Choose an emoji based on words in the weather description."""
+    text = condition.lower()
+    if "thunder" in text:
+        return "⛈️"
+    if "snow" in text or "sleet" in text or "blizzard" in text:
+        return "❄️"
+    if "rain" in text or "drizzle" in text or "shower" in text:
+        return "\U0001f327️"
+    if "fog" in text or "mist" in text:
+        return "\U0001f32b️"
+    if "cloud" in text or "overcast" in text:
+        return "☁️"
+    if "sunny" in text or "clear" in text:
+        return "☀️"
+    return "\U0001f324️"  # default: sun behind small cloud
 
 
 def get_weather(city):
     """Look up a city and return its current weather, or None if unavailable."""
     try:
-        # Step 1: turn the city name into coordinates (geocoding).
-        geo_url = "https://geocoding-api.open-meteo.com/v1/search"
-        geo_response = requests.get(
-            geo_url, params={"name": city, "count": 1}, timeout=10
+        url = "https://api.weatherapi.com/v1/current.json"
+        response = requests.get(
+            url, params={"key": WEATHER_API_KEY, "q": city}, timeout=10
         )
-        results = geo_response.json().get("results")
+        data = response.json()
 
-        if not results:
-            print(f"[geocode] no results. status={geo_response.status_code} "
-                  f"body={geo_response.text[:300]}")
-            return None  # City not found.
+        # WeatherAPI returns an "error" block for bad cities / key problems.
+        if "current" not in data:
+            print(f"[weather] no data. status={response.status_code} "
+                  f"body={response.text[:300]}")
+            return None
 
-        place = results[0]
-
-        # Step 2: get the current weather at those coordinates.
-        weather_url = "https://api.open-meteo.com/v1/forecast"
-        weather_response = requests.get(weather_url, params={
-            "latitude": place["latitude"],
-            "longitude": place["longitude"],
-            "current_weather": "true",
-        }, timeout=10)
-        current = weather_response.json().get("current_weather")
-
-        if not current:
-            print(f"[weather] no current_weather. status={weather_response.status_code} "
-                  f"url={weather_response.url} body={weather_response.text[:300]}")
-            return None  # Weather data missing from the response.
-
-        description, emoji = WEATHER_CODES.get(
-            current["weathercode"], ("Unknown", "❓")
-        )
+        location = data["location"]
+        current = data["current"]
+        condition = current["condition"]["text"]
 
         return {
-            "city": place["name"],
-            "country": place.get("country", ""),
-            "temperature": current["temperature"],
-            "windspeed": current["windspeed"],
-            "description": description,
-            "emoji": emoji,
+            "city": location["name"],
+            "country": location["country"],
+            "temperature": current["temp_c"],
+            "windspeed": current["wind_kph"],
+            "description": condition,
+            "emoji": pick_emoji(condition),
         }
     except requests.RequestException as error:
-        # Network problem, timeout, etc. Log it (shows in server logs) and
-        # fail gracefully instead of crashing with a 500 error.
+        # Network problem, timeout, etc. Log it and fail gracefully.
         print(f"Weather lookup failed for '{city}': {error}")
         return None
 
