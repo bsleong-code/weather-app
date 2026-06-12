@@ -24,38 +24,49 @@ WEATHER_CODES = {
 
 
 def get_weather(city):
-    """Look up a city and return its current weather, or None if not found."""
-    # Step 1: turn the city name into coordinates (geocoding).
-    geo_url = "https://geocoding-api.open-meteo.com/v1/search"
-    geo_response = requests.get(geo_url, params={"name": city, "count": 1})
-    results = geo_response.json().get("results")
+    """Look up a city and return its current weather, or None if unavailable."""
+    try:
+        # Step 1: turn the city name into coordinates (geocoding).
+        geo_url = "https://geocoding-api.open-meteo.com/v1/search"
+        geo_response = requests.get(
+            geo_url, params={"name": city, "count": 1}, timeout=10
+        )
+        results = geo_response.json().get("results")
 
-    if not results:
-        return None  # City not found.
+        if not results:
+            return None  # City not found.
 
-    place = results[0]
-    latitude = place["latitude"]
-    longitude = place["longitude"]
+        place = results[0]
 
-    # Step 2: get the current weather at those coordinates.
-    weather_url = "https://api.open-meteo.com/v1/forecast"
-    weather_response = requests.get(weather_url, params={
-        "latitude": latitude,
-        "longitude": longitude,
-        "current_weather": True,
-    })
-    current = weather_response.json()["current_weather"]
+        # Step 2: get the current weather at those coordinates.
+        weather_url = "https://api.open-meteo.com/v1/forecast"
+        weather_response = requests.get(weather_url, params={
+            "latitude": place["latitude"],
+            "longitude": place["longitude"],
+            "current_weather": "true",
+        }, timeout=10)
+        current = weather_response.json().get("current_weather")
 
-    description, emoji = WEATHER_CODES.get(current["weathercode"], ("Unknown", "❓"))
+        if not current:
+            return None  # Weather data missing from the response.
 
-    return {
-        "city": place["name"],
-        "country": place.get("country", ""),
-        "temperature": current["temperature"],
-        "windspeed": current["windspeed"],
-        "description": description,
-        "emoji": emoji,
-    }
+        description, emoji = WEATHER_CODES.get(
+            current["weathercode"], ("Unknown", "❓")
+        )
+
+        return {
+            "city": place["name"],
+            "country": place.get("country", ""),
+            "temperature": current["temperature"],
+            "windspeed": current["windspeed"],
+            "description": description,
+            "emoji": emoji,
+        }
+    except requests.RequestException as error:
+        # Network problem, timeout, etc. Log it (shows in server logs) and
+        # fail gracefully instead of crashing with a 500 error.
+        print(f"Weather lookup failed for '{city}': {error}")
+        return None
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -66,7 +77,7 @@ def home():
         city = request.form["city"]
         weather = get_weather(city)
         if weather is None:
-            error = f"Sorry, couldn't find '{city}'. Try another city."
+            error = f"Couldn't get weather for '{city}'. Check the spelling or try again."
     return render_template("index.html", weather=weather, error=error)
 
 
