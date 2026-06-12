@@ -34,6 +34,8 @@ def get_weather(city):
         results = geo_response.json().get("results")
 
         if not results:
+            print(f"[geocode] no results. status={geo_response.status_code} "
+                  f"body={geo_response.text[:300]}")
             return None  # City not found.
 
         place = results[0]
@@ -48,6 +50,8 @@ def get_weather(city):
         current = weather_response.json().get("current_weather")
 
         if not current:
+            print(f"[weather] no current_weather. status={weather_response.status_code} "
+                  f"url={weather_response.url} body={weather_response.text[:300]}")
             return None  # Weather data missing from the response.
 
         description, emoji = WEATHER_CODES.get(
