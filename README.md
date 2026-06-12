@@ -4,7 +4,8 @@ A simple web app that shows the **current weather** for any city in the world.
 Type a city name and get the live temperature, conditions, and wind speed —
 powered by a real weather API.
 
-> **Live demo:** _coming soon (added after deployment in the next step)_
+> **🔗 Live demo:** **[weather-app-i5e2.onrender.com](https://weather-app-i5e2.onrender.com)**
+> _(Free hosting — the first visit may take ~30s to wake up, then it's instant.)_
 
 ![Weather App screenshot](screenshot.png)
 
